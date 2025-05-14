@@ -3,6 +3,16 @@
  * @description Proxies TS (transport stream) files
  */
 
+// Helper function to safely create a URL object
+function safeCreateURL(url: string, base?: string): URL | null {
+  try {
+    return base ? new URL(url, base) : new URL(url);
+  } catch (error) {
+    console.error("URL parsing error:", error, "URL:", url, "Base:", base);
+    return null;
+  }
+}
+
 export default async function(request: Request, env: any, ctx: any) {
   // Handle CORS preflight requests
   if (request.method === 'OPTIONS') {
@@ -23,21 +33,26 @@ export default async function(request: Request, env: any, ctx: any) {
     const headersParam = url.searchParams.get('headers');
     
     if (!targetUrl) {
-      return new Response('URL parameter is required', { status: 400 });
+      return new Response('URL parameter is required', { 
+        status: 400,
+        headers: { 'Access-Control-Allow-Origin': '*' }
+      });
     }
     
     let customHeaders = {};
     try {
       customHeaders = headersParam ? JSON.parse(headersParam) : {};
     } catch (e) {
-      return new Response('Invalid headers format', { status: 400 });
+      return new Response('Invalid headers format', { 
+        status: 400,
+        headers: { 'Access-Control-Allow-Origin': '*' }
+      });
     }
     
     // Validate the URL
-    try {
-      new URL(targetUrl);
-    } catch (error) {
-      console.error('Invalid target URL:', targetUrl, error);
+    const validatedUrl = safeCreateURL(targetUrl);
+    if (!validatedUrl) {
+      console.error('Invalid target URL:', targetUrl);
       return new Response('Invalid target URL', { 
         status: 400,
         headers: { 'Access-Control-Allow-Origin': '*' }
@@ -52,11 +67,11 @@ export default async function(request: Request, env: any, ctx: any) {
       ...customHeaders
     });
     
-    console.log('Fetching TS from:', targetUrl);
+    console.log('Fetching TS from:', validatedUrl.toString());
     console.log('With headers:', JSON.stringify(Object.fromEntries(requestHeaders.entries())));
     
     // Fetch the TS file
-    const response = await fetch(targetUrl, {
+    const response = await fetch(validatedUrl.toString(), {
       method: 'GET',
       headers: requestHeaders
     });
