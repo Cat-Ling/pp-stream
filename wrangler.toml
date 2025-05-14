@@ -1,4 +1,4 @@
-name = "simple-proxy"
+name = "simple-proxy-v2"
 main = "./.output/server/index.mjs"
 workers_dev = true
 compatibility_date = "2022-09-10"
