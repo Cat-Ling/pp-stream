@@ -4,9 +4,6 @@
  */
 
 import { setResponseHeaders } from 'h3';
-import { IncomingMessage } from 'http';
-import https from 'node:https';
-import http from 'node:http';
 
 // Helper function to parse URLs
 function parseURL(req_url: string, baseUrl?: string) {
@@ -45,56 +42,6 @@ function parseURL(req_url: string, baseUrl?: string) {
   }
 }
 
-// Helper function to perform HTTP/HTTPS request
-function makeRequest(url: string, headers: any): Promise<{ data: string, statusCode: number }> {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
-    const isHttps = parsed.protocol === 'https:';
-    const options = {
-      hostname: parsed.hostname,
-      port: parsed.port || (isHttps ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.132 Safari/537.36',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        ...headers
-      }
-    };
-
-    console.log('Making request to:', url);
-    console.log('With headers:', JSON.stringify(options.headers));
-    
-    const requestLib = isHttps ? https : http;
-    const req = requestLib.request(options, (res: IncomingMessage) => {
-      console.log('Status code:', res.statusCode);
-      console.log('Response headers:', JSON.stringify(res.headers));
-      
-      let data = '';
-      
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      
-      res.on('end', () => {
-        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-          resolve({ data, statusCode: res.statusCode });
-        } else {
-          reject(new Error(`HTTP Error: ${res.statusCode} ${res.statusMessage}`));
-        }
-      });
-    });
-    
-    req.on('error', (error) => {
-      console.error('Request error:', error);
-      reject(error);
-    });
-    
-    req.end();
-  });
-}
-
 /**
  * Proxies m3u8 files and replaces the content to point to the proxy
  */
@@ -113,20 +60,23 @@ async function proxyM3U8(event: any) {
   try {
     headers = headersParam ? JSON.parse(headersParam) : {};
   } catch (e) {
-    console.error('Error parsing headers JSON:', e, 'Raw headers:', headersParam);
     return sendError(event, createError({
       statusCode: 400,
       statusMessage: 'Invalid headers format'
     }));
   }
-
-  console.log('Processing m3u8 request for URL:', url);
-  console.log('With headers:', JSON.stringify(headers));
   
   try {
-    // Use Node's http/https modules instead of fetch
-    const response = await makeRequest(url, headers);
-    const m3u8Content = response.data;
+    // Use native fetch instead of axios
+    const response = await fetch(url, { 
+      headers: headers as HeadersInit 
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch M3U8: ${response.status} ${response.statusText}`);
+    }
+    
+    const m3u8Content = await response.text();
     
     // Get the base URL for the host
     const host = getRequestHost(event);
