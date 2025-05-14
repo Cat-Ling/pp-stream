@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
   }
   
   try {
-    const response = await fetch(url, {
+    const response = await globalThis.fetch(url, {
       method: 'GET',
       headers: {
         ...headers as HeadersInit,

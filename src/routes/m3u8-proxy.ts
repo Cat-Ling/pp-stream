@@ -68,8 +68,8 @@ async function proxyM3U8(event: any) {
   
   try {
     // Use native fetch instead of axios
-    const response = await fetch(url, { 
-      headers: headers as HeadersInit 
+    const response = await globalThis.fetch(url, {
+      headers: headers as HeadersInit
     });
     
     if (!response.ok) {
