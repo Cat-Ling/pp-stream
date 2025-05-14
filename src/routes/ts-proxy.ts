@@ -36,8 +36,10 @@ export default defineEventHandler(async (event) => {
     const response = await globalThis.fetch(url, {
       method: 'GET',
       headers: {
-        ...headers as HeadersInit,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.132 Safari/537.36',
+        // Default User-Agent (from src/utils/headers.ts)
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:93.0) Gecko/20100101 Firefox/93.0',
+        // Spread the headers from the query parameter, allowing them to override defaults
+        ...(headers as HeadersInit),
       }
     });
     

@@ -69,7 +69,12 @@ async function proxyM3U8(event: any) {
   try {
     // Use native fetch instead of axios
     const response = await globalThis.fetch(url, {
-      headers: headers as HeadersInit
+      headers: {
+        // Default User-Agent (from src/utils/headers.ts)
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:93.0) Gecko/20100101 Firefox/93.0',
+        // Spread the headers from the query parameter, allowing them to override defaults
+        ...(headers as HeadersInit),
+      }
     });
     
     if (!response.ok) {
