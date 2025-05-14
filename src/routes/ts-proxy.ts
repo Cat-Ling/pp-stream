@@ -1,0 +1,66 @@
+/**
+ * @author Adapted from Eltik's CORS proxy
+ * @description Proxies TS (transport stream) files
+ */
+
+import { setResponseHeaders } from 'h3';
+
+/**
+ * Proxies TS (transport stream) files
+ */
+export default defineEventHandler(async (event) => {
+  // Handle CORS preflight requests
+  if (isPreflightRequest(event)) return handleCors(event, {});
+  
+  const url = getQuery(event).url as string;
+  const headersParam = getQuery(event).headers as string;
+  
+  if (!url) {
+    return sendError(event, createError({
+      statusCode: 400,
+      statusMessage: 'URL parameter is required'
+    }));
+  }
+  
+  let headers = {};
+  try {
+    headers = headersParam ? JSON.parse(headersParam) : {};
+  } catch (e) {
+    return sendError(event, createError({
+      statusCode: 400,
+      statusMessage: 'Invalid headers format'
+    }));
+  }
+  
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        ...headers as HeadersInit,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.132 Safari/537.36',
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch TS file: ${response.status} ${response.statusText}`);
+    }
+    
+    // Set appropriate headers for each video segment
+    setResponseHeaders(event, {
+      'Content-Type': 'video/mp2t',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': '*',
+      'Access-Control-Allow-Methods': '*',
+      'Cache-Control': 'public, max-age=3600'  // Allow caching of TS segments
+    });
+    
+    // Return the binary data directly - Nitro should handle this properly
+    return new Uint8Array(await response.arrayBuffer());
+  } catch (error: any) {
+    console.error('Error proxying TS file:', error);
+    return sendError(event, createError({
+      statusCode: error.response?.status || 500,
+      statusMessage: error.message || 'Error proxying TS file'
+    }));
+  }
+}); 
