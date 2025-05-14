@@ -16,23 +16,34 @@ export default async function(request: Request, env: any, ctx: any) {
     });
   }
   
-  // Parse URL parameters
-  const url = new URL(request.url);
-  const targetUrl = url.searchParams.get('url');
-  const headersParam = url.searchParams.get('headers');
-  
-  if (!targetUrl) {
-    return new Response('URL parameter is required', { status: 400 });
-  }
-  
-  let customHeaders = {};
   try {
-    customHeaders = headersParam ? JSON.parse(headersParam) : {};
-  } catch (e) {
-    return new Response('Invalid headers format', { status: 400 });
-  }
-  
-  try {
+    // Parse URL parameters
+    const url = new URL(request.url);
+    const targetUrl = url.searchParams.get('url');
+    const headersParam = url.searchParams.get('headers');
+    
+    if (!targetUrl) {
+      return new Response('URL parameter is required', { status: 400 });
+    }
+    
+    let customHeaders = {};
+    try {
+      customHeaders = headersParam ? JSON.parse(headersParam) : {};
+    } catch (e) {
+      return new Response('Invalid headers format', { status: 400 });
+    }
+    
+    // Validate the URL
+    try {
+      new URL(targetUrl);
+    } catch (error) {
+      console.error('Invalid target URL:', targetUrl, error);
+      return new Response('Invalid target URL', { 
+        status: 400,
+        headers: { 'Access-Control-Allow-Origin': '*' }
+      });
+    }
+    
     // Create request headers
     const requestHeaders = new Headers({
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.132 Safari/537.36',
@@ -41,6 +52,10 @@ export default async function(request: Request, env: any, ctx: any) {
       ...customHeaders
     });
     
+    console.log('Fetching TS from:', targetUrl);
+    console.log('With headers:', JSON.stringify(Object.fromEntries(requestHeaders.entries())));
+    
+    // Fetch the TS file
     const response = await fetch(targetUrl, {
       method: 'GET',
       headers: requestHeaders

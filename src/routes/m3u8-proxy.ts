@@ -5,37 +5,29 @@
 
 // Helper function to parse URLs
 function parseURL(req_url: string, baseUrl?: string) {
-  if (baseUrl) {
-    return new URL(req_url, baseUrl).href;
-  }
-  
-  const match = req_url.match(/^(?:(https?:)?\/\/)?(([^\/?]+?)(?::(\d{0,5})(?=[\/?]|$))?)([\/?][\S\s]*|$)/i);
-  
-  if (!match) {
-    return null;
-  }
-  
-  if (!match[1]) {
-    if (/^https?:/i.test(req_url)) {
-      return null;
+  try {
+    if (baseUrl) {
+      return new URL(req_url, baseUrl).toString();
     }
     
-    // Scheme is omitted
-    if (req_url.lastIndexOf("//", 0) === -1) {
-      // "//" is omitted
-      req_url = "//" + req_url;
+    // If it's already a fully qualified URL
+    if (/^https?:\/\//i.test(req_url)) {
+      return new URL(req_url).toString();
     }
-    req_url = (match[4] === "443" ? "https:" : "http:") + req_url;
-  }
-  
-  try {
-    const parsed = new URL(req_url);
-    if (!parsed.hostname) {
-      // "http://:1/" and "http:/notenoughslashes" could end up here
-      return null;
+    
+    // If it starts with // (protocol-relative URL)
+    if (req_url.startsWith('//')) {
+      return new URL(`https:${req_url}`).toString();
     }
-    return parsed.href;
+    
+    // If it's a relative URL and we have a base URL
+    if (baseUrl) {
+      return new URL(req_url, baseUrl).toString();
+    }
+    
+    return null;
   } catch (error) {
+    console.error("URL parsing error:", error, "for URL:", req_url, "with base:", baseUrl);
     return null;
   }
 }
@@ -117,21 +109,40 @@ export default async function(request: Request, env: any, ctx: any) {
         if (line.startsWith("#")) {
           if (line.startsWith("#EXT-X-KEY:")) {
             // Proxy the key URL
-            const regex = /https?:\/\/[^\""\s]+/g;
-            const keyUrl = regex.exec(line)?.[0];
+            const regex = /URI="([^"]+)"/g;
+            const match = regex.exec(line);
+            const keyUrl = match ? match[1] : null;
+            
             if (keyUrl) {
-              const proxyKeyUrl = `${baseProxyUrl}/ts-proxy?url=${encodeURIComponent(keyUrl)}&headers=${encodeURIComponent(JSON.stringify(customHeaders))}`;
-              newLines.push(line.replace(keyUrl, proxyKeyUrl));
+              let fullKeyUrl;
+              try {
+                // Try to get the full URL
+                fullKeyUrl = keyUrl.startsWith('http') ? keyUrl : new URL(keyUrl, targetUrl).toString();
+                const proxyKeyUrl = `${baseProxyUrl}/ts-proxy?url=${encodeURIComponent(fullKeyUrl)}&headers=${encodeURIComponent(JSON.stringify(customHeaders))}`;
+                newLines.push(line.replace(keyUrl, proxyKeyUrl));
+              } catch (error) {
+                console.error("Error processing key URL:", keyUrl, error);
+                newLines.push(line); // Keep original if error
+              }
             } else {
               newLines.push(line);
             }
           } else if (line.startsWith("#EXT-X-MEDIA:")) {
             // Proxy alternative media URLs (like audio streams)
-            const regex = /https?:\/\/[^\""\s]+/g;
-            const mediaUrl = regex.exec(line)?.[0];
+            const regex = /URI="([^"]+)"/g;
+            const match = regex.exec(line);
+            const mediaUrl = match ? match[1] : null;
+            
             if (mediaUrl) {
-              const proxyMediaUrl = `${baseProxyUrl}/m3u8-proxy?url=${encodeURIComponent(mediaUrl)}&headers=${encodeURIComponent(JSON.stringify(customHeaders))}`;
-              newLines.push(line.replace(mediaUrl, proxyMediaUrl));
+              try {
+                // Try to get the full URL
+                const fullMediaUrl = mediaUrl.startsWith('http') ? mediaUrl : new URL(mediaUrl, targetUrl).toString();
+                const proxyMediaUrl = `${baseProxyUrl}/m3u8-proxy?url=${encodeURIComponent(fullMediaUrl)}&headers=${encodeURIComponent(JSON.stringify(customHeaders))}`;
+                newLines.push(line.replace(mediaUrl, proxyMediaUrl));
+              } catch (error) {
+                console.error("Error processing media URL:", mediaUrl, error);
+                newLines.push(line); // Keep original if error
+              }
             } else {
               newLines.push(line);
             }
@@ -140,11 +151,13 @@ export default async function(request: Request, env: any, ctx: any) {
           }
         } else if (line.trim()) {
           // This is a quality variant URL
-          const variantUrl = parseURL(line, targetUrl);
-          if (variantUrl) {
+          try {
+            // Try to create a full URL
+            const variantUrl = line.startsWith('http') ? line : new URL(line, targetUrl).toString();
             newLines.push(`${baseProxyUrl}/m3u8-proxy?url=${encodeURIComponent(variantUrl)}&headers=${encodeURIComponent(JSON.stringify(customHeaders))}`);
-          } else {
-            newLines.push(line);
+          } catch (error) {
+            console.error("Error processing variant URL:", line, error);
+            newLines.push(line); // Keep original if error
           }
         } else {
           // Empty line, preserve it
@@ -164,11 +177,20 @@ export default async function(request: Request, env: any, ctx: any) {
         if (line.startsWith("#")) {
           if (line.startsWith("#EXT-X-KEY:")) {
             // Proxy the key URL
-            const regex = /https?:\/\/[^\""\s]+/g;
-            const keyUrl = regex.exec(line)?.[0];
+            const regex = /URI="([^"]+)"/g;
+            const match = regex.exec(line);
+            const keyUrl = match ? match[1] : null;
+            
             if (keyUrl) {
-              const proxyKeyUrl = `${baseProxyUrl}/ts-proxy?url=${encodeURIComponent(keyUrl)}&headers=${encodeURIComponent(JSON.stringify(customHeaders))}`;
-              newLines.push(line.replace(keyUrl, proxyKeyUrl));
+              try {
+                // Try to get the full URL
+                const fullKeyUrl = keyUrl.startsWith('http') ? keyUrl : new URL(keyUrl, targetUrl).toString();
+                const proxyKeyUrl = `${baseProxyUrl}/ts-proxy?url=${encodeURIComponent(fullKeyUrl)}&headers=${encodeURIComponent(JSON.stringify(customHeaders))}`;
+                newLines.push(line.replace(keyUrl, proxyKeyUrl));
+              } catch (error) {
+                console.error("Error processing key URL:", keyUrl, error);
+                newLines.push(line); // Keep original if error
+              }
             } else {
               newLines.push(line);
             }
@@ -177,11 +199,13 @@ export default async function(request: Request, env: any, ctx: any) {
           }
         } else if (line.trim() && !line.startsWith("#")) {
           // This is a segment URL (.ts file)
-          const segmentUrl = parseURL(line, targetUrl);
-          if (segmentUrl) {
+          try {
+            // Try to create a full URL
+            const segmentUrl = line.startsWith('http') ? line : new URL(line, targetUrl).toString();
             newLines.push(`${baseProxyUrl}/ts-proxy?url=${encodeURIComponent(segmentUrl)}&headers=${encodeURIComponent(JSON.stringify(customHeaders))}`);
-          } else {
-            newLines.push(line);
+          } catch (error) {
+            console.error("Error processing segment URL:", line, error);
+            newLines.push(line); // Keep original if error
           }
         } else {
           // Comment or empty line, preserve it
