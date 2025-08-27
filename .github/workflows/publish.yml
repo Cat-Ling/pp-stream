@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ toLower(github.repository) }}
+  IMAGE: ghcr.io/cat-ling/pp-stream
 
 jobs:
   build:
@@ -39,7 +39,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.IMAGE }}
           flavor: |
             latest=auto
           tags: |
